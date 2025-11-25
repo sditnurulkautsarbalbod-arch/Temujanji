@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
@@ -9,8 +10,18 @@ const Login: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Hardcoded for demo purposes. In real app, use proper auth.
-    if (password === 'admin123' || password === 'guru123') {
+    
+    // Ambil password dari file .env (VITE_ADMIN_PASSWORD)
+    // @ts-ignore
+    const correctPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+
+    // Cek apakah password di .env sudah disetting
+    if (!correctPassword) {
+      setError('Error Konfigurasi: Password Admin belum disetting di .env atau GitHub Secrets.');
+      return;
+    }
+
+    if (password === correctPassword) {
       navigate('/admin/dashboard');
     } else {
       setError('Password salah. Silakan coba lagi.');
@@ -49,9 +60,6 @@ const Login: React.FC = () => {
             Masuk
           </button>
         </form>
-        <div className="mt-6 text-center text-xs text-slate-400">
-          <p>Demo Password: admin123</p>
-        </div>
       </div>
     </div>
   );
