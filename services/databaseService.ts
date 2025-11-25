@@ -1,9 +1,10 @@
 
+
 import { Appointment, AppointmentStatus, StaffType } from '../types';
 
 // PENTING: Ganti URL di bawah ini dengan URL Web App dari Google Apps Script Anda (berakhiran /exec)
 // Pastikan Deploy sebagai: "Anyone" (Siapa saja)
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYaVo1z4y4MQlDYuMW535IuoYlWD8L7stq1JEkzLtQr0P2YoXQRpWRr7RwO_eqgEI3kA/exec"; 
+export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEt4bJzYMjbqgo6aFyASwgjO2lGcMHRH50PkbBa8qySDuFEfqc7OJqG8kDmnfVBsFu3g/exec"; 
 const STORAGE_KEY = 'sdit_nurul_kautsar_appointments';
 
 // Interface tambahan untuk parameter create
@@ -21,17 +22,17 @@ export const databaseService = {
     try {
       // Cek apakah URL valid
       if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("ISI_URL")) {
-         console.warn("URL Google Script belum dikonfigurasi.");
+         console.warn("URL Google Script belum dikonfigurasi dengan benar.");
          throw new Error("URL Konfigurasi Kosong");
       }
 
       // TAMBAHAN: &t=timestamp untuk bypass browser cache
       const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=read&t=${new Date().getTime()}`);
       
-      // Validasi Content-Type: Pastikan yang diterima adalah JSON, bukan HTML (Login Page)
+      // Validasi Content-Type: Pastikan yang diterima adalah JSON
       const contentType = response.headers.get("content-type");
-      if (contentType && contentType.indexOf("application/json") === -1) {
-        throw new Error("Respon server bukan JSON. Kemungkinan masalah izin akses (Deploy as Anyone).");
+      if (!contentType || contentType.indexOf("application/json") === -1) {
+        throw new Error("Respon server bukan JSON. Kemungkinan masalah izin akses (Pastikan Deploy as Anyone).");
       }
 
       if (!response.ok) {
@@ -41,17 +42,21 @@ export const databaseService = {
       const result = await response.json();
       
       if (result.status === 'success') {
+        // Mapping data dari Spreadsheet (raw) ke format App yang tepat jika perlu
+        const mappedData: Appointment[] = Array.isArray(result.data) ? result.data.map((item: any) => ({
+          ...item,
+          // Pastikan string date/time bersih dari tanda kutip jika ada
+          date: item.date ? String(item.date).replace(/^'/, '') : item.date,
+          time: item.time ? String(item.time).replace(/^'/, '') : item.time,
+          guestWhatsapp: item.guestWhatsapp ? String(item.guestWhatsapp).replace(/^'/, '') : item.guestWhatsapp,
+        })) : [];
+
         // SORTING: Urutkan data berdasarkan createdAt terbaru (Descending)
-        // Agar data baru selalu muncul paling atas
-        if (Array.isArray(result.data)) {
-           result.data.sort((a: Appointment, b: Appointment) => {
-              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-           });
-        }
+        mappedData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         // Sinkronisasi: Simpan data terbaru dari Cloud ke LocalStorage untuk cache
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(result.data));
-        return { data: result.data, source: 'remote' };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedData));
+        return { data: mappedData, source: 'remote' };
       }
       
       return { data: [], source: 'remote' };
@@ -59,9 +64,7 @@ export const databaseService = {
       console.warn("⚠️ Gagal terhubung ke Google Sheets. Menggunakan Data Lokal (Offline Mode).", error);
       // Fallback ke LocalStorage
       const localData = await this.getMockData();
-      // Tetap sort data lokal juga
       localData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
       return { data: localData, source: 'local' };
     }
   },
@@ -73,37 +76,33 @@ export const databaseService = {
   async createAppointment(appt: CreateAppointmentParams): Promise<Appointment> {
     const newAppt: Appointment = {
       ...appt,
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substr(2, 9), // ID sementara
       status: AppointmentStatus.PENDING,
       createdAt: new Date().toISOString(),
       notes: ''
-      // attachmentUrl diisi nanti oleh backend
     };
 
     // 1. Simpan ke LocalStorage (Optimistic UI)
     const localData = await this.getMockData();
-    localData.unshift(newAppt); // Add to beginning
+    localData.unshift(newAppt);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
 
-    // 2. Coba kirim ke Google Sheets
+    // 2. Kirim ke Google Sheets
     try {
       if (GOOGLE_SCRIPT_URL && !GOOGLE_SCRIPT_URL.includes("ISI_URL")) {
-        
-        if (appt.fileData) {
-          console.log(`Mengirim file: ${appt.attachmentName}`);
-        }
-
-        // Kirim request 'no-cors' (Fire and forget)
+        // Menggunakan mode 'no-cors' karena limitasi browser ke Google Apps Script POST.
+        // PENTING: Jangan set Content-Type: application/json saat mode no-cors.
         await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors', 
-            headers: {
-                'Content-Type': 'text/plain',
-            },
             body: JSON.stringify({
               action: 'create',
               ...appt,
-              fileName: appt.attachmentName, // Mapping nama file
+              // Mapping field file
+              fileName: appt.attachmentName, 
+              fileData: appt.fileData,
+              mimeType: appt.mimeType,
+              // Field sistem
               id: newAppt.id,
               status: newAppt.status,
               createdAt: newAppt.createdAt
@@ -136,7 +135,6 @@ export const databaseService = {
           await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({
               action: 'update',
               id: id,
@@ -165,7 +163,6 @@ export const databaseService = {
             await fetch(GOOGLE_SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify({
                 action: 'delete',
                 id: id

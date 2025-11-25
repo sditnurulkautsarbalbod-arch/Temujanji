@@ -1,17 +1,29 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { GEMINI_MODEL_FLASH } from "../constants";
 
-// WARNING: In a production environment, API keys should be handled via a backend proxy 
-// to avoid exposing them in client-side code. 
-// For this demo, we assume process.env.API_KEY is available or the user will provide it.
+// Helper untuk mendapatkan API Key dari berbagai kemungkinan source
+// 1. process.env.API_KEY (Standard Node/Webpack)
+// 2. import.meta.env.VITE_API_KEY (Vite Environment)
+const getApiKey = (): string | undefined => {
+  // @ts-ignore - Mengabaikan error typescript untuk import.meta karena config mungkin berbeda
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_KEY) {
+    // @ts-ignore
+    return import.meta.env.VITE_API_KEY;
+  }
+  return process.env.API_KEY;
+};
 
-const apiKey = process.env.API_KEY || ''; 
-const ai = new GoogleGenAI({ apiKey });
+const apiKey = getApiKey();
+
+// Inisialisasi Client Gemini
+// Gunakan key jika ada, jika tidak biarkan kosong (nanti akan divalidasi saat pemanggilan fungsi)
+const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key-to-prevent-crash' });
 
 export const geminiService = {
   /**
-   * Generates a polite WhatsApp message for the admin to send to the guest
-   * based on the status update (e.g., Rejection, Reschedule).
+   * Membuat draft pesan WhatsApp yang sopan untuk tamu
+   * berdasarkan perubahan status janji temu.
    */
   async generateResponseDraft(
     guestName: string,
@@ -19,7 +31,16 @@ export const geminiService = {
     reason: string,
     notes: string
   ): Promise<string> {
-    if (!apiKey) return "API Key not configured. Please add process.env.API_KEY.";
+    const activeKey = getApiKey();
+
+    // Validasi ketersediaan API Key sebelum request
+    if (!activeKey) {
+      console.error("API Key is missing. Please create a .env file with VITE_API_KEY=...");
+      return "⚠️ Error: API Key Gemini belum dikonfigurasi. Mohon buat file .env di root project dan isi VITE_API_KEY Anda.";
+    }
+
+    // Re-inisialisasi dengan key yang valid jika perlu (untuk memastikan instance fresh)
+    const aiClient = new GoogleGenAI({ apiKey: activeKey });
 
     const prompt = `
       Bertindaklah sebagai staf administrasi sekolah Islam SD IT Nurul Kautsar yang sopan, ramah, dan profesional.
@@ -40,22 +61,27 @@ export const geminiService = {
     `;
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await aiClient.models.generateContent({
         model: GEMINI_MODEL_FLASH,
         contents: prompt,
       });
       return response.text || "Maaf, gagal men-generate pesan.";
     } catch (error) {
       console.error("Gemini Error:", error);
-      return "Terjadi kesalahan saat menghubungi AI Assistant.";
+      return "Terjadi kesalahan saat menghubungi AI Assistant. Pastikan Kuota API mencukupi atau Key valid.";
     }
   },
 
   /**
-   * Analyzes appointment trends for the admin dashboard summary.
+   * Menganalisis tren data janji temu untuk dashboard admin.
    */
   async analyzeTrends(appointmentsJson: string): Promise<string> {
-    if (!apiKey) return "API Key missing.";
+    const activeKey = getApiKey();
+    if (!activeKey) {
+      return "Analisis tidak tersedia (API Key belum dikonfigurasi di .env).";
+    }
+
+    const aiClient = new GoogleGenAI({ apiKey: activeKey });
 
     const prompt = `
       Berikut adalah data janji temu dalam format JSON:
@@ -66,12 +92,13 @@ export const geminiService = {
     `;
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await aiClient.models.generateContent({
         model: GEMINI_MODEL_FLASH,
         contents: prompt,
       });
       return response.text || "Tidak ada analisis tersedia.";
     } catch (error) {
+      console.error("Trend Analysis Error:", error);
       return "Gagal menganalisis data.";
     }
   }

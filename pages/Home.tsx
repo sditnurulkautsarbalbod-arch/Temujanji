@@ -7,14 +7,7 @@ const Home: React.FC = () => {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <div className="relative bg-emerald-900 text-white py-20 lg:py-32 overflow-hidden">
-        <div className="absolute inset-0 opacity-20">
-          <img 
-            src="https://picsum.photos/1920/1080?blur=2" 
-            alt="School Background" 
-            className="w-full h-full object-cover"
-          />
-        </div>
+      <div className="relative bg-emerald-800 text-white py-20 lg:py-32">
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight">
             Selamat Datang di <span className="text-yellow-400">SD IT Nurul Kautsar</span>
