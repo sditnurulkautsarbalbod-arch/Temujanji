@@ -107,7 +107,8 @@ const AppointmentForm: React.FC = () => {
       await databaseService.createAppointment({
         guestName: formData.guestName,
         guestWhatsapp: formData.guestWhatsapp,
-        guestEmail: formData.guestEmail,
+        // Kirim undefined jika string kosong agar lebih rapi di database
+        guestEmail: formData.guestEmail.trim() === '' ? undefined : formData.guestEmail,
         targetType: formData.targetType,
         targetStaffId: formData.targetStaffId,
         targetStaffName: selectedStaff?.name || 'Unknown',
@@ -193,6 +194,7 @@ const AppointmentForm: React.FC = () => {
             <label className="block text-sm font-medium text-slate-700 mb-1">Email (Opsional)</label>
             <input
               type="email"
+              // Tidak ada atribut required disini, jadi boleh kosong
               className="w-full border border-slate-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
               placeholder="nama@email.com"
               value={formData.guestEmail}
