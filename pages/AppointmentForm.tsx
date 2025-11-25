@@ -55,9 +55,9 @@ const AppointmentForm: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      // Basic validation (e.g., max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setError("Ukuran file terlalu besar. Maksimal 5MB.");
+      // VALIDASI UKURAN FILE: SEKARANG 10 MB
+      if (file.size > 10 * 1024 * 1024) {
+        setError("Ukuran file terlalu besar. Maksimal 10MB.");
         return;
       }
       setSelectedFile(file);
@@ -308,7 +308,7 @@ const AppointmentForm: React.FC = () => {
                       <p className="pl-1">atau drag and drop</p>
                     </div>
                     <p className="text-xs text-slate-500">
-                      PDF, DOCX, JPG up to 5MB
+                      PDF, DOCX, JPG up to 10MB
                     </p>
                   </div>
                 </div>
