@@ -55,7 +55,7 @@ export const databaseService = {
         mappedData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         // Sinkronisasi: Simpan data terbaru dari Cloud ke LocalStorage untuk cache
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedData));
+        this.saveToLocalStorage(mappedData);
         return { data: mappedData, source: 'remote' };
       }
       
@@ -74,20 +74,25 @@ export const databaseService = {
    * Logika: Simpan LocalStorage (biar cepat) -> Kirim ke API (Background)
    */
   async createAppointment(appt: CreateAppointmentParams): Promise<Appointment> {
+    // 1. PISAHKAN DATA FILE DARI DATA TAMPILAN
+    // fileData sangat besar (Base64), jangan disimpan di LocalStorage agar tidak kena limit 5MB
+    const { fileData, mimeType, ...restData } = appt;
+
     const newAppt: Appointment = {
-      ...appt,
+      ...restData, // Hanya copy data teks
       id: Math.random().toString(36).substr(2, 9), // ID sementara
       status: AppointmentStatus.PENDING,
       createdAt: new Date().toISOString(),
-      notes: ''
+      notes: '',
+      attachmentUrl: '' // URL akan diisi nanti setelah sync dari server
     };
 
-    // 1. Simpan ke LocalStorage (Optimistic UI)
+    // 2. Simpan ke LocalStorage (Optimistic UI) - TANPA fileData
     const localData = await this.getMockData();
     localData.unshift(newAppt);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+    this.saveToLocalStorage(localData);
 
-    // 2. Kirim ke Google Sheets
+    // 3. Kirim ke Google Sheets (LENGKAP dengan fileData)
     try {
       if (GOOGLE_SCRIPT_URL && !GOOGLE_SCRIPT_URL.includes("ISI_URL")) {
         // Menggunakan mode 'no-cors' karena limitasi browser ke Google Apps Script POST.
@@ -97,11 +102,11 @@ export const databaseService = {
             mode: 'no-cors', 
             body: JSON.stringify({
               action: 'create',
-              ...appt,
+              ...restData, // Data teks
               // Mapping field file
               fileName: appt.attachmentName, 
-              fileData: appt.fileData,
-              mimeType: appt.mimeType,
+              fileData: fileData, // INI YANG BERAT (Dikirim ke server saja)
+              mimeType: mimeType,
               // Field sistem
               id: newAppt.id,
               status: newAppt.status,
@@ -127,7 +132,7 @@ export const databaseService = {
     if (index !== -1) {
         localData[index].status = status;
         if (notes) localData[index].notes = notes;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+        this.saveToLocalStorage(localData);
     }
 
     try {
@@ -156,7 +161,7 @@ export const databaseService = {
   async deleteAppointment(id: string): Promise<boolean> {
     const localData = await this.getMockData();
     const newData = localData.filter(a => a.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+    this.saveToLocalStorage(newData);
 
     try {
         if (GOOGLE_SCRIPT_URL && !GOOGLE_SCRIPT_URL.includes("ISI_URL")) {
@@ -175,10 +180,37 @@ export const databaseService = {
     return true;
   },
 
-  // Helper untuk ambil data lokal
+  // Helper untuk ambil data lokal dengan aman
   getMockData: (): Promise<Appointment[]> => {
-      const data = localStorage.getItem(STORAGE_KEY);
-      return Promise.resolve(data ? JSON.parse(data) : []);
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        return Promise.resolve(data ? JSON.parse(data) : []);
+      } catch (e) {
+        console.error("Error reading from LocalStorage", e);
+        return Promise.resolve([]);
+      }
+  },
+
+  // Helper aman untuk menyimpan ke LocalStorage
+  saveToLocalStorage: (data: Appointment[]) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e: any) {
+      // Menangani error QuotaExceededError
+      if (e.name === 'QuotaExceededError' || e.code === 22) {
+        console.error("⚠️ LocalStorage Penuh! Menghapus data lama untuk memberi ruang.");
+        // Strategi: Hapus 50% data terlama jika penuh
+        const halfLength = Math.ceil(data.length / 2);
+        const reducedData = data.slice(0, halfLength); 
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(reducedData));
+        } catch (retryError) {
+          console.error("Masih gagal menyimpan data meskipun sudah dikurangi.", retryError);
+        }
+      } else {
+        console.error("Gagal menyimpan ke LocalStorage:", e);
+      }
+    }
   },
 
   // Helper hapus cache
