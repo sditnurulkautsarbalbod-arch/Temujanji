@@ -28,12 +28,12 @@ jobs:
           cache: 'npm'
           
       - name: Install dependencies
+        # PERBAIKAN: Menggunakan npm install menggantikan npm ci
         run: npm install
         
       - name: Build
         run: npm run build
         env:
-          # BAGIAN PENTING: Mengambil Secret untuk ditanam ke aplikasi
           VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
           
       - name: Setup Pages
