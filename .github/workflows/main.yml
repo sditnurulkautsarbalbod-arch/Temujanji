@@ -1,5 +1,0 @@
-- name: Build
-        run: npm run build
-        env:
-          # Baris ini PENTING agar Vite bisa membaca Secret saat build
-          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
