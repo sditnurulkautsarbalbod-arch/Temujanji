@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState, useRef } from 'react';
 import { databaseService } from '../services/databaseService';
 import { geminiService } from '../services/geminiService';
@@ -7,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 import { 
-  CheckCircle, XCircle, Clock, Calendar, Sparkles, Search, Filter, MoreHorizontal, MessageSquare, Paperclip, Eye, CalendarClock, User, Phone, Mail, FileText, Trash2, ChevronLeft, ChevronRight, AlertTriangle, Send, FilePenLine, ExternalLink, RefreshCw, WifiOff
+  CheckCircle, XCircle, Clock, Calendar, Sparkles, Search, Filter, MoreHorizontal, MessageSquare, Paperclip, Eye, CalendarClock, User, Phone, Mail, FileText, Trash2, ChevronLeft, ChevronRight, AlertTriangle, Send, FilePenLine, ExternalLink, RefreshCw, WifiOff, Database
 } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
@@ -15,6 +16,7 @@ const AdminDashboard: React.FC = () => {
   const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
+  const [dataSource, setDataSource] = useState<'remote' | 'local' | 'cache'>('remote');
   const [mounted, setMounted] = useState(false);
   
   // Pagination State
@@ -47,15 +49,23 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     setMounted(true);
-    loadData();
+    // Initial load: Gunakan cache jika ada (forceRefresh = false)
+    loadData(false);
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (forceRefresh = false) => {
     setLoading(true);
-    const result = await databaseService.getAppointments();
-    setAppointments(result.data);
-    setFilteredAppointments(result.data);
-    setLoading(false);
+    try {
+      // Panggil service dengan parameter forceRefresh
+      const result = await databaseService.getAppointments(forceRefresh);
+      setAppointments(result.data);
+      setFilteredAppointments(result.data);
+      setDataSource(result.source);
+    } catch (e) {
+      console.error("Gagal load data", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -113,7 +123,8 @@ const AdminDashboard: React.FC = () => {
     setSelectedAppt(null);
     setAiDraft('');
     setActionNote('');
-    loadData();
+    // Reload dengan force refresh agar perubahan status di sheet terambil kembali
+    loadData(true);
   };
 
   const handleDelete = async () => {
@@ -121,7 +132,7 @@ const AdminDashboard: React.FC = () => {
     await databaseService.deleteAppointment(selectedAppt.id);
     setDeleteModalOpen(false);
     setSelectedAppt(null);
-    loadData();
+    loadData(true);
   };
 
   const openActionModal = (appt: Appointment, type: 'APPROVE' | 'REJECT' | 'RESCHEDULE') => {
@@ -159,7 +170,7 @@ const AdminDashboard: React.FC = () => {
         </div>
         <div>
           <button 
-            onClick={loadData} 
+            onClick={() => loadData(true)} // Force Refresh true
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-emerald-600 transition-colors shadow-sm"
           >
@@ -200,9 +211,15 @@ const AdminDashboard: React.FC = () => {
             <p className="text-emerald-100 mb-4">
               Ada <span className="font-bold text-white text-xl">{appointments.filter(a => a.status === AppointmentStatus.PENDING).length}</span> permohonan janji temu baru yang perlu ditinjau hari ini.
             </p>
-            <p className="text-xs text-emerald-200 opacity-80 flex items-center gap-1">
-              <CheckCircle size={12} /> Terhubung ke Google Sheets Database
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-emerald-200 opacity-80 flex items-center gap-1 bg-emerald-700/50 px-2 py-1 rounded">
+                <CheckCircle size={12} /> Database Connected
+              </p>
+              <p className="text-xs text-emerald-200 opacity-80 flex items-center gap-1 bg-emerald-700/50 px-2 py-1 rounded">
+                {dataSource === 'cache' ? <Database size={12} /> : dataSource === 'remote' ? <RefreshCw size={12} /> : <WifiOff size={12} />}
+                Source: {dataSource === 'cache' ? 'Cache (Cepat)' : dataSource === 'remote' ? 'Server (Live)' : 'Lokal (Offline)'}
+              </p>
+            </div>
           </div>
           <Sparkles className="absolute right-4 bottom-4 text-emerald-500 opacity-30 w-32 h-32" />
         </div>
