@@ -15,7 +15,7 @@ export enum UserRole {
 export enum StaffType {
   HEADMASTER = 'Kepala Sekolah',
   TEACHER = 'Guru',
-  STAFF = 'Staf Administrasi'
+  STAFF = 'Staf'
 }
 
 export interface StaffMember {
