@@ -3,7 +3,7 @@ import { staffData } from './staffData';
 
 export const APP_NAME = "SD IT Nurul Kautsar";
 export const SCHOOL_ADDRESS = "Jl. Andi Mangerangi No. 47, Makassar";
-export const CONTACT_WA = "+6281234567890";
+export const CONTACT_WA = "+6285954587345";
 
 // Load data staff dari file TS
 export const MOCK_STAFF: StaffMember[] = staffData as unknown as StaffMember[];
