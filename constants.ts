@@ -1,18 +1,12 @@
-import { StaffMember, StaffType } from './types';
+import { StaffMember } from './types';
+import { staffData } from './staffData';
 
 export const APP_NAME = "SD IT Nurul Kautsar";
 export const SCHOOL_ADDRESS = "Jl. Andi Mangerangi No. 47, Makassar";
 export const CONTACT_WA = "+6281234567890";
 
-// Mock Staff Data (In a real app, this comes from the 'Guru' and 'Staf' sheets)
-export const MOCK_STAFF: StaffMember[] = [
-  { id: 'hm-1', name: 'H. Ahmad Fauzi, M.Pd', type: StaffType.HEADMASTER },
-  { id: 'tc-1', name: 'Siti Aminah, S.Pd', type: StaffType.TEACHER, position: 'Matematika' },
-  { id: 'tc-2', name: 'Budi Santoso, S.Pd', type: StaffType.TEACHER, position: 'PAI' },
-  { id: 'tc-3', name: 'Rina Wati, S.Pd', type: StaffType.TEACHER, position: 'Tematik Kelas 1' },
-  { id: 'st-1', name: 'Nurul Hidayah', type: StaffType.STAFF, position: 'Tata Usaha' },
-  { id: 'st-2', name: 'Agus Salim', type: StaffType.STAFF, position: 'Keamanan' },
-];
+// Load data staff dari file TS
+export const MOCK_STAFF: StaffMember[] = staffData as unknown as StaffMember[];
 
 // Updated time slots to match new operational hours (until 11:30)
 export const TIME_SLOTS = [
