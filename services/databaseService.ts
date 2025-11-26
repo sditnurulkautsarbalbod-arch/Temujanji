@@ -6,6 +6,8 @@ import { Appointment, AppointmentStatus, StaffType } from '../types';
 // Pastikan Deploy sebagai: "Anyone" (Siapa saja)
 export const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEt4bJzYMjbqgo6aFyASwgjO2lGcMHRH50PkbBa8qySDuFEfqc7OJqG8kDmnfVBsFu3g/exec"; 
 const STORAGE_KEY = 'sdit_nurul_kautsar_appointments';
+const STORAGE_TIMESTAMP_KEY = 'sdit_last_fetch_timestamp';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 Menit (dalam milidetik)
 
 // Interface tambahan untuk parameter create
 interface CreateAppointmentParams extends Omit<Appointment, 'id' | 'status' | 'createdAt' | 'attachmentUrl'> {
@@ -16,18 +18,37 @@ interface CreateAppointmentParams extends Omit<Appointment, 'id' | 'status' | 'c
 export const databaseService = {
   /**
    * Mengambil semua data janji temu
-   * Logika: Coba Fetch API -> Jika Gagal -> Ambil dari LocalStorage
+   * Logika: Cek Cache -> Jika Valid pakai Lokal -> Jika Expired/Force baru Fetch API
    */
-  async getAppointments(): Promise<{ data: Appointment[], source: 'remote' | 'local' }> {
+  async getAppointments(forceRefresh = false): Promise<{ data: Appointment[], source: 'remote' | 'local' | 'cache' }> {
     try {
+      // 1. CEK CACHE
+      const lastFetchStr = localStorage.getItem(STORAGE_TIMESTAMP_KEY);
+      const lastFetchTime = lastFetchStr ? parseInt(lastFetchStr) : 0;
+      const now = Date.now();
+      const isCacheValid = (now - lastFetchTime < CACHE_DURATION);
+
+      // Jika tidak dipaksa refresh DAN cache masih valid
+      if (!forceRefresh && isCacheValid) {
+        const localData = await this.getMockData();
+        if (localData.length > 0) {
+           console.log("⚡ Menggunakan Data Cache (Lokal)");
+           // Tetap sort biar rapi
+           localData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+           return { data: localData, source: 'cache' };
+        }
+      }
+
+      // 2. FETCH REMOTE (Jika cache expired atau forceRefresh)
       // Cek apakah URL valid
       if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("ISI_URL")) {
          console.warn("URL Google Script belum dikonfigurasi dengan benar.");
          throw new Error("URL Konfigurasi Kosong");
       }
 
+      console.log("🌐 Mengambil Data Baru dari Server...");
       // TAMBAHAN: &t=timestamp untuk bypass browser cache
-      const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=read&t=${new Date().getTime()}`);
+      const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=read&t=${now}`);
       
       // Validasi Content-Type: Pastikan yang diterima adalah JSON
       const contentType = response.headers.get("content-type");
@@ -56,6 +77,10 @@ export const databaseService = {
 
         // Sinkronisasi: Simpan data terbaru dari Cloud ke LocalStorage untuk cache
         this.saveToLocalStorage(mappedData);
+        
+        // Update Timestamp fetch terakhir
+        localStorage.setItem(STORAGE_TIMESTAMP_KEY, now.toString());
+
         return { data: mappedData, source: 'remote' };
       }
       
@@ -114,6 +139,8 @@ export const databaseService = {
             })
         });
         console.log("✅ Request kirim data terkirim ke Google Sheets");
+        // Kita invalidate cache agar next fetch mengambil data fresh yang sudah ada URL file-nya
+        localStorage.removeItem(STORAGE_TIMESTAMP_KEY);
       }
     } catch (error) {
       console.error("❌ Gagal sinkronisasi ke Google Sheets (Data tersimpan di Lokal):", error);
@@ -147,6 +174,8 @@ export const databaseService = {
               notes: notes || ''
             })
           });
+          // Invalidate cache biar sinkron
+          localStorage.removeItem(STORAGE_TIMESTAMP_KEY);
        }
     } catch (error) {
       console.error("Gagal update status ke Google Sheets:", error);
@@ -173,6 +202,8 @@ export const databaseService = {
                 id: id
                 })
             });
+            // Invalidate cache
+            localStorage.removeItem(STORAGE_TIMESTAMP_KEY);
         }
     } catch (error) {
       console.error("Gagal menghapus data di Google Sheets:", error);
@@ -216,5 +247,6 @@ export const databaseService = {
   // Helper hapus cache
   clearLocalCache: () => {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_TIMESTAMP_KEY);
   }
 };
